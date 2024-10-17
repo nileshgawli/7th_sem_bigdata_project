@@ -1,0 +1,298 @@
+```{r}
+library(tidyverse) # Multiple packages
+library(plotly) # Interactive visualizations
+library(ggthemes) # Visualization themes
+library(viridis) # Color scales
+library(corrplot) # Correlation visualizations
+library(gridExtra) # Grids for visualizations
+library(lubridate) # Working with dates
+library(randomForest) # Classification algorithm
+```
+
+```{r}
+train = read.csv('../input/train.csv')
+test = read.csv('../input/test.csv')
+```
+
+```{r}
+glimpse(train)
+```
+
+```{r}
+full_data <- bind_rows(train, test)
+```
+
+```{r}
+library(ggplot2)
+
+# Create the scatter plot with improvements
+ggplot(full_data_subset, aes(x = budget, y = revenue)) +
+  geom_point(alpha = 0.5, color = "darkgreen", size = 2) + # Increased size for better visibility
+  scale_x_log10() + # Logarithmic scale for budget
+  scale_y_log10() + # Logarithmic scale for revenue
+  labs(
+    title = "Budget vs. Revenue",
+    subtitle = "Log Scale Representation",
+    x = "Log Budget",
+    y = "Log Revenue"
+  ) +
+  theme_minimal(base_size = 15) + # Increased base font size for better readability
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"), # Center and bold title
+    plot.subtitle = element_text(hjust = 0.5, face = "italic"), # Center subtitle
+    axis.title.x = element_text(face = "bold"),
+    axis.title.y = element_text(face = "bold")
+  ) +
+  geom_smooth(method = "lm", color = "blue", se = FALSE) # Optional: add a trend line
+
+
+```
+
+```{r}
+
+# Budget
+ggplot(full_data[1:3000,], aes(x = budget, y = revenue, color = budget)) +
+   geom_point() +
+  # scale_color_gradient(low = "grey10", high = "grey75") +
+   scale_color_viridis(begin = 0, end = .95, option = 'D') + 
+   geom_smooth(method = 'lm', color = 'red3', fill = 'red3') +
+   scale_y_continuous(breaks = c(0, 500000000, 1000000000, 1500000000),
+                      labels = c('$0', '$500', '$1000', '$1500')) +
+   theme_classic() +
+   theme(legend.position = 'none') +
+   labs(title = 'Revenue by budget', x = 'Budget', y = 'Revenue (Millions)')
+  theme(legend.position="none")
+```
+
+```{r}
+# Runtime
+ggplot(full_data[1:3000,], aes(x = runtime, y = revenue, color = runtime)) +
+   geom_point() +
+  # scale_color_gradient(low = "grey10", high = "grey75") +
+   scale_color_viridis(begin = 0, end = .95, option = 'D') + 
+   geom_smooth(method = 'lm', color = 'red3', fill = 'red3') +
+   scale_y_continuous(breaks = c(0, 500000000, 1000000000, 1500000000),
+                      labels = c('$0', '$500', '$1000', '$1500')) +
+   theme_classic() +
+   theme(legend.position = 'none') +
+   labs(title = 'Revenue by runtime', x = 'Runtime', y = 'Revenue (Millions)')
+```
+
+```{r}
+# Popularity
+ggplot(full_data[1:3000,], aes(x = popularity, y = revenue, color = popularity)) +
+   geom_point() +
+ #  scale_color_gradient(low = "grey10", high = "grey75") +
+   scale_color_viridis(begin = 0, end = .95, option = 'D') +   
+   geom_smooth(method = 'lm', color = 'red3', fill = 'red3') +
+   scale_y_continuous(breaks = c(0, 500000000, 1000000000, 1500000000),
+                      labels = c('$0', '$500', '$1000', '$1500')) +
+   theme_classic() +
+   theme(legend.position = 'none') +
+   labs(title = 'Revenue by popularity', x = 'Popularity', y = 'Revenue (Millions)')
+
+#We can see some clear trends that an increase in budget and popularity tend to lead to higher revenue. Runtime seems to show this trend as well, although not as strongly. 
+```
+
+```{r}
+#For Collections
+full_data$collection_name <- str_extract(full_data$belongs_to_collection, 
+            pattern = "(?<=name\\'\\:\\s{1}\\').+(?=\\'\\,\\s{1}\\'poster)")
+full_data[1:3000,] %>%
+   group_by(collection_name) %>%
+   summarise(movie_count = n()) %>%
+   arrange(desc(movie_count)) %>%
+   filter(!is.na(collection_name)) %>%
+   head(10) 
+full_data$collection[!is.na(full_data$belongs_to_collection)] <- 'Collection'
+full_data$collection[is.na(full_data$belongs_to_collection)] <- 'No collection'
+
+#For Genres
+genres_matching_point <- "Comedy|Horror|Action|Drama|Documentary|Science Fiction|
+              Crime|Fantasy|Thriller|Animation|Adventure|Mystery|War|Romance|Music|
+              Family|Western|History|TV Movie|Foreign"
+full_data$main_genre <- str_extract(full_data$genres, genres_matching_point)
+
+#For Production Companies
+full_data$prod_comp_id <- as.integer(str_extract(full_data$production_companies, 
+                                      pattern = "([0-9]+)"))
+full_data$prod_comp_name <- gsub('(^\\[\\{\'name\'\\:\\s\'|\'\\,\\s\'id.*)', '',
+                                 full_data$production_companies)
+full_data[1:3000,] %>%
+   group_by(prod_comp_name) %>%
+   summarise(movie_count = n()) %>%
+   arrange(desc(movie_count)) %>%
+   filter(!is.na(prod_comp_name)) %>%
+   head(10) 
+#Listing the Big Companies separately and converting the data into this column into a categorical variable
+full_data$top_prod_comp[full_data$prod_comp_name=='Universal Pictures'] <- 'Universal Pictures'
+full_data$top_prod_comp[full_data$prod_comp_name=='Paramount Pictures'] <- 'Paramount Pictures'
+full_data$top_prod_comp[full_data$prod_comp_name=='Twentieth Century Fox Film Corporation'] <- 'Twentieth Century Fox Film Corporation'
+full_data$top_prod_comp[full_data$prod_comp_name=='Columbia Pictures'] <- 'Columbia Pictures'
+full_data$top_prod_comp[full_data$prod_comp_name=='New Line Cinema'] <- 'New Line Cinema'
+full_data$top_prod_comp[full_data$prod_comp_name=='Warner Bros.'] <- 'Warner Bros.'
+full_data$top_prod_comp[full_data$prod_comp_name=='Walt Disney Pictures'] <- 'Walt Disney Pictures'
+full_data$top_prod_comp[is.na(full_data$top_prod_comp)] <- 'Other'
+full_data$prod_comp_size[full_data$prod_comp_name=='Universal Pictures'] <- 'Big producer' 
+full_data$prod_comp_size[full_data$prod_comp_name=='Paramount Pictures'] <- 'Big producer' 
+full_data$prod_comp_size[full_data$prod_comp_name=='Twentieth Century Fox Film Corporation'] <- 'Big producer'
+full_data$prod_comp_size[full_data$prod_comp_name=='Columbia Pictures'] <- 'Big producer'
+full_data$prod_comp_size[full_data$prod_comp_name=='New Line Cinema'] <- 'Big producer'
+full_data$prod_comp_size[full_data$prod_comp_name=='Warner Bros.'] <- 'Big producer'
+full_data$prod_comp_size[full_data$prod_comp_name=='Walt Disney Pictures'] <- 'Big producer'
+full_data$prod_comp_size[is.na(full_data$prod_comp_size)] <- 'Small producer'
+
+#For Production Countries
+full_data$prod_country <- str_extract(string = full_data$production_countries, 
+                                      pattern = "[:upper:]+")
+full_data[1:3000,] %>%
+   group_by(prod_country) %>%
+   summarise(movie_count = n()) %>%
+   arrange(desc(movie_count)) %>%
+   filter(!is.na(prod_country)) %>%
+   head(10) 
+#Listing and converting the major production companies to build a categorical datatype
+full_data$top_prod_country[full_data$prod_country=='US'] <- 'United States'
+full_data$top_prod_country[full_data$prod_country=='GB'] <- 'Great Britain'
+full_data$top_prod_country[full_data$prod_country=='FR'] <- 'France'
+full_data$top_prod_country[is.na(full_data$top_prod_country)] <- 'Other'
+
+#For Original Language
+full_data[1:3000,] %>%
+   group_by(original_language) %>%
+   summarise(movie_count = n()) %>%
+   arrange(desc(movie_count)) %>%
+   filter(!is.na(original_language)) %>%
+   head(10) 
+full_data$language[full_data$original_language=='en'] <- 'English'
+full_data$language[is.na(full_data$language)] <- 'Non-English'
+
+#For release dates
+full_data[which(is.na(full_data$release_date)), c('title', 'runtime')]
+full_data$release_date[3829] <- '3/20/01'
+full_data$release_date_mod <- parse_date_time2(full_data$release_date, "mdy",
+                                               cutoff_2000 = 20)
+full_data$year_released <- ymd(full_data$release_date_mod) %>% 
+   lubridate::year()  # Grab year.
+full_data$quarter_released <- ymd(full_data$release_date_mod) %>%
+   lubridate::quarter()  # Grab quarter.
+full_data$month_released <- ymd(full_data$release_date_mod) %>% 
+   lubridate::month(label = TRUE, abbr = FALSE)  # Grab month.
+full_data$week_released <- ymd(full_data$release_date_mod) %>%
+   lubridate::week()  # Grab week.
+full_data$weekday_released <- ymd(full_data$release_date_mod) %>%
+   lubridate::wday(label = TRUE, abbr = FALSE)  # Grab weekday.
+
+#For Taglines
+full_data$tagline_presence[is.na(full_data$tagline)] <- 'No tagline'
+full_data$tagline_presence[is.na(full_data$tagline_presence)] <- 'Tagline'
+
+#For Homepage
+full_data$homepage_presence[is.na(full_data$homepage)] <- 'No homepage'
+full_data$homepage_presence[is.na(full_data$homepage_presence)] <- 'Homepage'
+                
+# Total cast count and by gender
+full_data$number_of_cast <- str_count(full_data$cast, 'name')
+full_data$female_cast <- str_count(full_data$cast, ('gender\'\\:\\s1'))
+full_data$male_cast <- str_count(full_data$cast, ('gender\'\\:\\s2'))
+full_data$unspecified_cast <- str_count(full_data$cast, ('gender\'\\:\\s0'))
+
+# Total crew count and by gender
+full_data$number_of_crew <- str_count(full_data$crew, 'name')
+full_data$female_crew <- str_count(full_data$crew, ('gender\'\\:\\s1'))
+full_data$male_crew <- str_count(full_data$crew, ('gender\'\\:\\s2'))
+full_data$unspecified_crew <- str_count(full_data$crew, ('gender\'\\:\\s0'))
+                
+#Quantifying Qualitative variables
+full_data$number_of_genres <- str_count(full_data$genres, 'name')
+full_data$number_of_prod_companies <- str_count(full_data$production_companies, 'name')
+full_data$number_of_prod_countries <- str_count(full_data$production_countries, 'name')
+full_data$number_of_spoken_languages <- str_count(full_data$spoken_languages, 'name')
+full_data$number_of_keywords <- str_count(full_data$Keywords, 'name')
+full_data$title_length <- str_length(full_data$title)
+full_data$tagline_length <- str_length(full_data$tagline)
+full_data$overview_length <- str_length(full_data$overview)                
+
+#Building a subset
+full_data_subset <- subset(full_data, 
+                     select = c(popularity, runtime, budget, prod_comp_size, 
+                     top_prod_comp, prod_comp_id, main_genre, language, collection,
+                     top_prod_country, tagline_presence, homepage_presence,
+                     year_released, quarter_released, month_released, week_released,
+                     weekday_released, number_of_keywords, number_of_prod_companies,
+                     number_of_genres, title_length, tagline_length, number_of_cast,
+                     number_of_crew, female_cast, male_cast, female_crew, male_crew,
+                   # number_of_prod_countries, number_of_spoken_languages,
+                   # imdb_id_2, overview_length, unspecified_cast, unspecified_crew,
+                      revenue))
+```
+
+```{r}
+full_data_subset$runtime[is.na(full_data_subset$runtime)] <- mean(full_data_subset$runtime, na.rm = TRUE)
+full_data_subset$number_of_cast[is.na(full_data_subset$number_of_cast)] <- mean(full_data_subset$number_of_cast, na.rm = TRUE)
+full_data_subset$number_of_crew[is.na(full_data_subset$number_of_crew)] <- mean(full_data_subset$number_of_crew, na.rm = TRUE)
+full_data_subset$tagline_length[is.na(full_data_subset$tagline_length)] <- mean(full_data_subset$tagline_length, na.rm = TRUE)
+full_data_subset$title_length[is.na(full_data_subset$title_length)] <- mean(full_data_subset$title_length, na.rm = TRUE)
+full_data_subset$female_cast[is.na(full_data_subset$female_cast)] <- mean(full_data_subset$female_cast, na.rm = TRUE)
+full_data_subset$male_cast[is.na(full_data_subset$male_cast)] <- mean(full_data_subset$male_cast, na.rm = TRUE)
+full_data_subset$female_crew[is.na(full_data_subset$female_crew)] <- mean(full_data_subset$female_crew, na.rm = TRUE)
+full_data_subset$male_crew[is.na(full_data_subset$male_crew)] <- mean(full_data_subset$male_crew, na.rm = TRUE)
+full_data_subset$main_genre[is.na(full_data_subset$main_genre)] <- "Drama"
+full_data_subset$number_of_genres[is.na(full_data_subset$number_of_genres)] <- 1
+full_data_subset$number_of_prod_companies[is.na(full_data_subset$number_of_prod_companies)] <- 1
+full_data_subset$number_of_keywords[is.na(full_data_subset$number_of_keywords)] <- 0
+full_data_subset$prod_comp_id[is.na(full_data_subset$prod_comp_id)] <- 10000
+
+full_data_subset <- mutate(full_data_subset,
+                           budget = log10(budget + 1),
+                           year_released = log10(year_released),
+                           popularity = log10(popularity + 1),
+                           revenue = log10(revenue + 1))
+```
+
+```{r}
+# Create linear model to predict budget. 
+lm_budget <- lm(budget ~ number_of_cast + number_of_crew + year_released +
+                   popularity + runtime + number_of_genres + prod_comp_id +
+                   main_genre, 
+                data = full_data_subset, na.action = na.omit)
+
+# Predict all NAs in budget with lm_budget.
+full_data_subset$budget[is.na(full_data_subset$budget)] <- predict(lm_budget)
+
+full_data_subset$budget_year_ratio <- full_data_subset$budget/full_data_subset$year_released
+
+full_data_subset <- full_data_subset %>% mutate_if(is.character, as.factor)
+full_data_subset$weekday_released <- factor(full_data_subset$weekday_release, ordered = FALSE)
+full_data_subset$month_released <- factor(full_data_subset$month_released, ordered = FALSE)
+full_data_subset$quarter_released <- factor(full_data_subset$quarter_released)
+```
+
+```{r}
+train <- full_data_subset[1:3000,]
+test <- full_data_subset[3001:7398,]
+```
+
+```{r}
+rf_model <- randomForest(revenue ~ .,
+                         data = train, 
+                         ntree = 501,
+                         replace = TRUE,
+                         nodesize = 9,
+                         importance = TRUE); print(rf_model)
+```
+
+```{r}
+prediction <- predict(rf_model, test)
+solution <- data.frame(id = full_data[3001:7398,]$id, revenue = prediction)
+solution <- as_tibble(solution) %>%
+   mutate(revenue = 10^revenue)
+```
+
+```{r}
+write.csv(solution, file = 'predicted_revenue.csv', row.names = F)
+```
+
+```{r}
+
+```
